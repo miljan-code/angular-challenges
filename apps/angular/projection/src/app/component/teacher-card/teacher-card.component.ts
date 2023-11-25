@@ -1,35 +1,47 @@
-import { Component, OnInit } from '@angular/core';
-import { FakeHttpService } from '../../data-access/fake-http.service';
+import { Component, inject } from '@angular/core';
+import { AsyncPipe } from '@angular/common';
+import { switchMap, tap } from 'rxjs';
+
+import {
+  FakeHttpService,
+  randTeacher,
+} from '../../data-access/fake-http.service';
 import { TeacherStore } from '../../data-access/teacher.store';
-import { CardType } from '../../model/card.model';
-import { Teacher } from '../../model/teacher.model';
 import { CardComponent } from '../../ui/card/card.component';
+import { ListItemComponent } from '../../ui/list-item/list-item.component';
+import { CardDirective } from '../../ui/card/card.directive';
 
 @Component({
   selector: 'app-teacher-card',
-  template: `<app-card
-    [list]="teachers"
-    [type]="cardType"
-    customClass="bg-light-red"></app-card>`,
-  styles: [
-    `
-      ::ng-deep .bg-light-red {
-        background-color: rgba(250, 0, 0, 0.1);
-      }
-    `,
-  ],
+  template: `
+    <app-card
+      [list]="(teachers$ | async)!"
+      (addNewItem)="handleAddNewItem()"
+      class="bg-yellow-100">
+      <img card-header src="assets/img/teacher.png" width="200px" />
+      <ng-template card-list-item let-teacher>
+        <app-list-item (deleteItem)="handleDeleteItem(teacher.id)">
+          {{ teacher.firstname }}
+        </app-list-item>
+      </ng-template>
+    </app-card>
+  `,
   standalone: true,
-  imports: [CardComponent],
+  imports: [CardComponent, ListItemComponent, CardDirective, AsyncPipe],
 })
-export class TeacherCardComponent implements OnInit {
-  teachers: Teacher[] = [];
-  cardType = CardType.TEACHER;
+export class TeacherCardComponent {
+  http = inject(FakeHttpService);
+  store = inject(TeacherStore);
+  teachers$ = this.http.fetchTeachers$.pipe(
+    tap((teachers) => this.store.addAll(teachers)),
+    switchMap(() => this.store.teachers$),
+  );
 
-  constructor(private http: FakeHttpService, private store: TeacherStore) {}
+  handleDeleteItem(id: number): void {
+    this.store.deleteOne(id);
+  }
 
-  ngOnInit(): void {
-    this.http.fetchTeachers$.subscribe((t) => this.store.addAll(t));
-
-    this.store.teachers$.subscribe((t) => (this.teachers = t));
+  handleAddNewItem(): void {
+    this.store.addOne(randTeacher());
   }
 }
